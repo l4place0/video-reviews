@@ -100,5 +100,26 @@
     ],
     "summary_preview": "## 核心主题 本教程展示了如何使用 C 语言和 SDL（Simple DirectMedia Layer）库，从零开始实现基础的音频文件播放功能。  ## 前置条件 1.  **C/C++ 编程基础**：需要理解变量、函数、结构体和基本的编译链接知识。 2.  **SDL 库环境**：已安装 SD...",
     "url": "reviews/4f889c1b-24a6-439c-b528-6497c4ff1cea.html"
+  },
+  {
+    "id": "ae3dda54-e416-47cf-9091-4d7bc86bb918",
+    "title": "【中文字幕】从零开始用 C 处理音频｜SDL 音频",
+    "platform": "bilibili",
+    "date": "2026-05-28",
+    "tags": [
+      "general",
+      "bilibili高考季",
+      "C语言",
+      "编程",
+      "RookieOnline菜鸟在线",
+      "数据结构",
+      "C/C++",
+      "【中文字幕】",
+      "Linux",
+      "Coding",
+      "ArrayList"
+    ],
+    "summary_preview": "## 核心内容 本视频是一个编程实操教程，主题为“从零开始用C语言播放音频”。视频作者演示了如何在Linux环境下，使用SDL2库（Simple DirectMedia Layer）从头编写一个C程序来加载并播放一个WAV音频文件。整个过程包括查阅官方文档、编写代码、处理错误、编译和调试，最终实现音...",
+    "url": "reviews/ae3dda54-e416-47cf-9091-4d7bc86bb918.html"
   }
 ]

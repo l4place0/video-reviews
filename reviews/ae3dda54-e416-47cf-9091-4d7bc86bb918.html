@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>【中文字幕】从零开始用 C 处理音频｜SDL 音频 - Review</title>
+<style>
+/* ===== Reset & Base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0f1117; --bg2: #1a1d27; --bg3: #242836;
+  --fg: #e1e4ed; --fg2: #8b8fa3; --fg3: #5c6070;
+  --accent: #6c8cff; --accent2: #4a6adf;
+  --green: #4ade80; --yellow: #facc15; --red: #f87171; --orange: #fb923c;
+  --radius: 8px; --shadow: 0 2px 12px rgba(0,0,0,.3);
+}
+html { font-size: 15px; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.6; min-height: 100vh; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ===== Layout ===== */
+.app-header { background: var(--bg2); border-bottom: 1px solid var(--bg3); padding: 12px 24px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 100; }
+.app-header h1 { font-size: 1.1rem; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-header .meta { font-size: .8rem; color: var(--fg2); }
+.nav-tabs { display: flex; gap: 4px; background: var(--bg2); padding: 8px 24px; border-bottom: 1px solid var(--bg3); position: sticky; top: 49px; z-index: 99; }
+.nav-tab { padding: 6px 16px; border-radius: var(--radius); cursor: pointer; font-size: .85rem; color: var(--fg2); border: none; background: none; transition: all .15s; }
+.nav-tab:hover { background: var(--bg3); color: var(--fg); }
+.nav-tab.active { background: var(--accent); color: #fff; }
+.nav-tab .badge { background: var(--bg3); color: var(--fg2); border-radius: 10px; padding: 1px 7px; font-size: .7rem; margin-left: 6px; }
+.nav-tab.active .badge { background: rgba(255,255,255,.2); color: #fff; }
+
+.panel { display: none; padding: 24px; max-width: 960px; margin: 0 auto; }
+.panel.active { display: block; }
+
+/* ===== Search ===== */
+.search-bar { position: relative; margin-bottom: 16px; }
+.search-bar input { width: 100%; padding: 10px 40px 10px 14px; background: var(--bg3); border: 1px solid transparent; border-radius: var(--radius); color: var(--fg); font-size: .9rem; outline: none; transition: border-color .15s; }
+.search-bar input:focus { border-color: var(--accent); }
+.search-bar .search-count { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: .75rem; color: var(--fg3); }
+.search-bar .search-nav { position: absolute; right: 80px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px; }
+.search-bar .search-nav button { background: var(--bg2); border: 1px solid var(--fg3); color: var(--fg2); border-radius: 4px; cursor: pointer; padding: 2px 8px; font-size: .75rem; }
+mark { background: var(--yellow); color: #000; border-radius: 2px; padding: 0 2px; }
+mark.current { background: var(--orange); }
+
+/* ===== Summary ===== */
+.summary-content { background: var(--bg2); border-radius: var(--radius); padding: 20px; line-height: 1.8; }
+.summary-content h2 { font-size: 1.15rem; margin: 20px 0 8px; color: var(--accent); }
+.summary-content h2:first-child { margin-top: 0; }
+.summary-content p { margin: 8px 0; }
+.summary-content ul, .summary-content ol { margin: 8px 0 8px 24px; }
+.summary-content li { margin: 4px 0; }
+
+/* ===== Cards ===== */
+.cards-controls { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+.cards-controls .count { color: var(--fg2); font-size: .85rem; margin-left: auto; }
+.btn { padding: 8px 16px; border-radius: var(--radius); border: none; cursor: pointer; font-size: .85rem; transition: all .15s; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent2); }
+.btn-ghost { background: transparent; border: 1px solid var(--fg3); color: var(--fg2); }
+.btn-ghost:hover { border-color: var(--fg); color: var(--fg); }
+
+.card-deck { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.flash-card { perspective: 800px; height: 220px; cursor: pointer; }
+.flash-card .card-inner { position: relative; width: 100%; height: 100%; transition: transform .5s; transform-style: preserve-3d; }
+.flash-card.flipped .card-inner { transform: rotateY(180deg); }
+.flash-card .card-front, .flash-card .card-back { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; border-radius: var(--radius); padding: 20px; display: flex; flex-direction: column; justify-content: center; overflow-y: auto; }
+.flash-card .card-front { background: var(--bg2); border: 1px solid var(--bg3); }
+.flash-card .card-back { background: var(--bg3); border: 1px solid var(--fg3); transform: rotateY(180deg); }
+.flash-card .card-label { font-size: .7rem; color: var(--fg3); text-transform: uppercase; margin-bottom: 8px; }
+.flash-card .card-text { font-size: .95rem; line-height: 1.5; }
+.flash-card .card-status { display: flex; gap: 6px; margin-top: auto; padding-top: 12px; }
+.flash-card .card-status button { flex: 1; padding: 6px; border-radius: var(--radius); border: 1px solid var(--fg3); background: transparent; color: var(--fg2); cursor: pointer; font-size: .75rem; transition: all .15s; }
+.flash-card .card-status button:hover { border-color: var(--accent); color: var(--accent); }
+.flash-card .card-status button.s-0:hover { border-color: var(--red); color: var(--red); }
+.flash-card .card-status button.s-1:hover { border-color: var(--orange); color: var(--orange); }
+.flash-card .card-status button.s-2:hover { border-color: var(--green); color: var(--green); }
+.flash-card .card-status button.s-3:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ===== SRS Review Mode ===== */
+.srs-overlay { display: none; position: fixed; inset: 0; background: var(--bg); z-index: 200; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
+.srs-overlay.active { display: flex; }
+.srs-progress { font-size: .85rem; color: var(--fg2); margin-bottom: 16px; }
+.srs-card { width: 100%; max-width: 560px; min-height: 300px; perspective: 800px; cursor: pointer; }
+.srs-card .card-inner { position: relative; width: 100%; min-height: 300px; transition: transform .5s; transform-style: preserve-3d; }
+.srs-card.flipped .card-inner { transform: rotateY(180deg); }
+.srs-card .card-front, .srs-card .card-back { position: absolute; width: 100%; min-height: 300px; backface-visibility: hidden; background: var(--bg2); border: 1px solid var(--bg3); border-radius: var(--radius); padding: 32px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; }
+.srs-card .card-back { background: var(--bg3); transform: rotateY(180deg); }
+.srs-card .card-text { font-size: 1.1rem; line-height: 1.6; }
+.srs-buttons { display: flex; gap: 12px; margin-top: 24px; }
+.srs-buttons button { padding: 10px 24px; border-radius: var(--radius); border: none; cursor: pointer; font-size: .9rem; color: #fff; transition: opacity .15s; }
+.srs-buttons button:hover { opacity: .85; }
+.srs-done { text-align: center; }
+.srs-done h2 { margin-bottom: 12px; }
+.srs-done p { color: var(--fg2); margin-bottom: 20px; }
+
+/* ===== Timeline ===== */
+.timeline { position: relative; padding-left: 32px; }
+.timeline::before { content: ""; position: absolute; left: 12px; top: 0; bottom: 0; width: 2px; background: var(--bg3); }
+.timeline-item { position: relative; margin-bottom: 24px; }
+.timeline-item::before { content: ""; position: absolute; left: -26px; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); }
+.timeline-item .tl-time { font-size: .75rem; color: var(--accent); font-weight: 600; margin-bottom: 4px; }
+.timeline-item .tl-frame { border-radius: var(--radius); cursor: pointer; max-width: 320px; border: 2px solid transparent; transition: border-color .15s; }
+.timeline-item .tl-frame:hover { border-color: var(--accent); }
+.timeline-item .tl-text { margin-top: 8px; font-size: .85rem; color: var(--fg2); line-height: 1.5; }
+
+/* ===== Transcript ===== */
+.transcript-seg { display: flex; gap: 12px; padding: 10px 12px; border-radius: var(--radius); transition: background .2s; align-items: flex-start; }
+.transcript-seg:hover { background: var(--bg2); }
+.transcript-seg.highlight { background: rgba(108, 140, 255, .12); }
+.transcript-seg .seg-time { font-size: .75rem; color: var(--accent); white-space: nowrap; min-width: 48px; padding-top: 2px; font-variant-numeric: tabular-nums; }
+.transcript-seg .seg-text { flex: 1; font-size: .9rem; line-height: 1.6; }
+.transcript-seg .note-btn { background: none; border: none; cursor: pointer; font-size: .85rem; opacity: 0; transition: opacity .15s; padding: 2px 6px; }
+.transcript-seg:hover .note-btn { opacity: .6; }
+.transcript-seg .note-btn:hover { opacity: 1; }
+.transcript-seg .note-btn.has-note { opacity: 1; }
+.seg-cite { color: var(--accent); cursor: pointer; font-size: .85em; text-decoration: none; border-bottom: 1px dashed var(--accent); transition: background .15s; }
+.seg-cite:hover { background: rgba(108, 140, 255, .15); border-bottom-style: solid; }
+.frame-cite { color: #e67e22; cursor: pointer; font-size: .85em; text-decoration: none; border-bottom: 1px dashed #e67e22; transition: background .15s; }
+.frame-cite:hover { background: rgba(230,126,34,.15); border-bottom-style: solid; }
+.seg-frame { margin: 6px 0 6px 60px; }
+.seg-frame img { max-width: 200px; max-height: 120px; border-radius: 6px; border: 1px solid var(--border); }
+.seg-note { margin: 4px 0 4px 60px; padding: 8px 12px; background: rgba(108,140,255,.08); border-left: 3px solid var(--accent); border-radius: 0 var(--radius) var(--radius) 0; font-size: .85rem; color: var(--fg2); }
+.note-input-wrap { margin: 4px 0 4px 60px; display: flex; gap: 8px; }
+.note-input-wrap textarea { flex: 1; background: var(--bg3); border: 1px solid var(--fg3); border-radius: var(--radius); color: var(--fg); padding: 8px; font-size: .85rem; resize: vertical; min-height: 48px; outline: none; }
+.note-input-wrap textarea:focus { border-color: var(--accent); }
+.note-input-wrap button { align-self: flex-end; }
+
+/* ===== Lightbox ===== */
+.lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.9); z-index: 300; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
+.lightbox.active { display: flex; }
+.lightbox img { max-width: 90vw; max-height: 85vh; border-radius: var(--radius); }
+.lightbox-nav { display: flex; align-items: center; gap: 16px; margin-top: 12px; }
+.lightbox-nav button { background: var(--bg3); border: none; color: var(--fg); padding: 8px 16px; border-radius: var(--radius); cursor: pointer; font-size: 1rem; }
+.lightbox-nav span { color: var(--fg2); font-size: .85rem; }
+
+/* ===== No Data ===== */
+.empty-state { text-align: center; padding: 48px 24px; color: var(--fg3); }
+.empty-state p { margin-top: 8px; }
+
+/* ===== Question Type UI ===== */
+.type-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.type-btn { padding: 3px 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg1); color: var(--fg2); cursor: pointer; font-size: .75rem; transition: all .15s; }
+.type-btn:hover { border-color: var(--accent); }
+.type-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.q-badge { font-size: .65rem; padding: 1px 6px; border-radius: 8px; background: var(--bg3); color: var(--fg3); margin-left: 6px; vertical-align: middle; }
+.q-card { background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+.q-card .q-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.q-card .q-type { font-size: .7rem; padding: 2px 8px; border-radius: 8px; background: var(--accent); color: #fff; }
+.q-card .q-diff { font-size: .7rem; color: var(--fg3); }
+.q-card .q-stem { font-size: .9rem; margin-bottom: 10px; line-height: 1.5; }
+.q-card .q-options { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.q-card .q-opt { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; font-size: .85rem; transition: all .15s; }
+.q-card .q-opt:hover { border-color: var(--accent); }
+.q-card .q-opt.selected { border-color: var(--accent); background: rgba(108,140,255,.1); }
+.q-card .q-opt.correct { border-color: var(--green); background: rgba(76,175,80,.1); }
+.q-card .q-opt.wrong { border-color: var(--red); background: rgba(244,67,54,.1); }
+.q-card .q-blank-input { padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg2); color: var(--fg); font-size: .85rem; min-width: 80px; }
+.q-card .q-blank-input.correct { border-color: var(--green); }
+.q-card .q-blank-input.wrong { border-color: var(--red); }
+.q-card .q-explanation { font-size: .8rem; color: var(--fg3); margin-top: 8px; padding: 8px; background: var(--bg2); border-radius: var(--radius); display: none; }
+.q-card .q-explanation.show { display: block; }
+.q-card .q-actions { display: flex; gap: 6px; margin-top: 10px; }
+.q-card .q-actions button { padding: 4px 12px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg2); color: var(--fg2); cursor: pointer; font-size: .8rem; }
+.q-card .q-actions button:hover { border-color: var(--accent); }
+.q-card .q-seq-item { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 4px; cursor: grab; font-size: .85rem; background: var(--bg2); }
+.q-card .q-seq-item.dragging { opacity: .5; }
+.q-card .q-seq-item.correct-pos { border-color: var(--green); }
+.q-card .q-seq-item.wrong-pos { border-color: var(--red); }
+.q-card .q-match-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.q-card .q-match-item { padding: 8px; border: 1px solid var(--border); border-radius: var(--radius); font-size: .85rem; text-align: center; cursor: pointer; }
+.q-card .q-match-item.selected { border-color: var(--accent); background: rgba(108,140,255,.1); }
+.q-card .q-match-item.matched { opacity: .5; cursor: default; }
+.q-card textarea.q-textarea { width: 100%; min-height: 60px; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg2); color: var(--fg); font-size: .85rem; resize: vertical; }
+.q-card pre.q-code { background: var(--bg2); padding: 12px; border-radius: var(--radius); font-size: .8rem; overflow-x: auto; margin-bottom: 8px; }
+.q-card .q-key-points { font-size: .8rem; color: var(--fg3); margin-top: 6px; }
+.q-card .q-key-points li { margin: 2px 0; }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <h1 id="doc-title">【中文字幕】从零开始用 C 处理音频｜SDL 音频</h1>
+  <span class="meta">bilibili &middot; <a href="https://www.bilibili.com/video/BV1UyL26XEP8/" target="_blank">original</a></span>
+</header>
+
+<nav class="nav-tabs">
+  <button class="nav-tab active" data-tab="summary">Summary</button>
+  <button class="nav-tab" data-tab="cards">Cards <span class="badge" id="cards-count">25</span></button>
+  <button class="nav-tab" data-tab="timeline">Timeline <span class="badge" id="frames-count">0</span></button>
+  <button class="nav-tab" data-tab="transcript">Transcript <span class="badge" id="seg-count">68</span></button>
+</nav>
+
+<main>
+  <!-- ===== Summary Panel ===== -->
+  <section id="panel-summary" class="panel active">
+    <div class="search-bar">
+      <input type="text" id="search-input" placeholder="Search summary & transcript...">
+      <div class="search-nav"><button id="search-prev">&uarr;</button><button id="search-next">&darr;</button></div>
+      <span class="search-count" id="search-count"></span>
+    </div>
+    <div class="summary-content" id="summary-content"></div>
+  </section>
+
+  <!-- ===== Cards Panel ===== -->
+  <section id="panel-cards" class="panel">
+    
+    <div class="cards-controls">
+      <button class="btn btn-primary" id="srs-start">Start Review</button>
+      <button class="btn btn-ghost" id="cards-reset">Reset All</button>
+      <span class="count" id="cards-due-info"></span>
+    </div>
+    <div class="type-filters" id="type-filters"></div>
+    <div class="card-deck" id="card-deck"></div>
+    
+  </section>
+
+  <!-- ===== Timeline Panel ===== -->
+  <section id="panel-timeline" class="panel">
+    
+    <div class="empty-state"><p>No frames extracted for this video.</p></div>
+    
+  </section>
+
+  <!-- ===== Transcript Panel ===== -->
+  <section id="panel-transcript" class="panel">
+    <div class="search-bar">
+      <input type="text" id="ts-search" placeholder="Search transcript...">
+      <div class="search-nav"><button id="ts-search-prev">&uarr;</button><button id="ts-search-next">&darr;</button></div>
+      <span class="search-count" id="ts-search-count"></span>
+    </div>
+    <div id="transcript-body"></div>
+  </section>
+</main>
+
+<!-- SRS Review Overlay -->
+<div class="srs-overlay" id="srs-overlay">
+  <div id="srs-session"></div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox">
+  <img id="lb-img" src="" alt="frame">
+  <div class="lightbox-nav">
+    <button id="lb-prev">&larr; Prev</button>
+    <span id="lb-counter"></span>
+    <button id="lb-next">Next &rarr;</button>
+  </div>
+</div>
+
+<script>
+// ===== Data Injection =====
+const DATA = {"taskId": "ae3dda54-e416-47cf-9091-4d7bc86bb918", "title": "【中文字幕】从零开始用 C 处理音频｜SDL 音频", "url": "https://www.bilibili.com/video/BV1UyL26XEP8/", "platform": "bilibili", "summary": "## 核心内容\n本视频是一个编程实操教程，主题为“从零开始用C语言播放音频”。视频作者演示了如何在Linux环境下，使用SDL2库（Simple DirectMedia Layer）从头编写一个C程序来加载并播放一个WAV音频文件。整个过程包括查阅官方文档、编写代码、处理错误、编译和调试，最终实现音频播放。\n\n## 关键要点\n1.  **初始化与设置**：使用SDL库前，必须通过 `SDL_InitSubSystem(SDL_INIT_AUDIO)` 初始化音频子系统 [F@20:52]。\n2.  **加载WAV文件**：使用 `SDL_LoadWAV` 函数加载WAV文件到内存缓冲区，该函数需要音频规格结构体指针、缓冲区指针和长度指针作为参数，并需检查其返回值是否为NULL以处理错误 [F@21:00, F@22:34]。\n3.  **打开音频设备**：使用 `SDL_OpenAudioDevice` 打开一个音频设备进行播放，该函数包含设备名、是否为采集设备、期望的音频规格、实际获得的规格和允许的更改等参数，其中 `desired` 和 `obtained` 参数常指向同一个结构体 [F@23:22, F@24:37]。\n4.  **排队与播放**：使用 `SDL_QueueAudio` 将加载的音频数据推送到已打开的音频设备队列中，这是“推送”模型的关键函数。随后必须调用 `SDL_PauseAudioDevice(dev, 0)` 来取消暂停设备，音频才会开始播放 [F@33:04, F@37:48]。\n5.  **资源管理与清理**：程序结束时需要按顺序关闭音频设备 (`SDL_CloseAudioDevice`)、释放WAV文件缓冲区 (`SDL_FreeWAV`) 并退出SDL子系统 (`SDL_Quit`) [F@41:44]。\n\n## 详细分析\n### 音频子系统初始化\n视频首先展示了在 `main` 函数中调用 `SDL_InitSubSystem(SDL_INIT_AUDIO)`，这是使用SDL音频功能的第一步，用于准备音频环境 [F@20:52]。\n\n### 加载WAV音频文件\n作者查阅了 `SDL_LoadWAV` 的官方文档，明确了其参数：文件名、用于接收音频规格的 `SDL_AudioSpec` 结构体指针、用于接收音频数据的 `Uint8*` 缓冲区指针，以及接收数据长度的 `Uint32` 指针。在代码中，他声明了这些变量，并将加载结果赋给一个 `SDL_AudioSpec*` 变量 `return_spec`，随后通过检查该指针是否为NULL来判断文件是否加载成功 [F@21:00, F@22:34]。\n\n### 打开音频设备\n这是视频中耗时较长的部分，作者仔细查阅了 `SDL_OpenAudioDevice` 的文档。该函数有五个参数：\n-   `device`：设备名称字符串，传 `NULL` 表示使用默认设备。\n-   `iscapture`：整数，0表示播放设备，非0表示录制设备。\n-   `desired`：指向 `SDL_AudioSpec` 的指针，描述应用期望的音频格式。\n-   `obtained`：指向 `SDL_AudioSpec` 的指针，用于接收实际使用的音频格式。\n-   `allowed_changes`：整数标志，指定允许SDL调整哪些格式参数。文档指出，如果应用只能处理特定格式，应传递0 [F@23:22, F@24:37, F@26:02]。\n\n作者在代码中将 `return_spec`（即加载WAV文件后获得的规格）同时传递给 `desired` 和 `obtained` 参数，并将 `allowed_changes` 设为0。打开设备后，他将返回的设备ID存储在 `dev` 变量中，并检查其有效性（文档指出0表示失败）[F@28:08, F@29:44, F@32:08]。\n\n### 音频排队、播放与等待\n成功打开设备后，代码使用 `SDL_QueueAudio(dev, audio_buf, audio_len)` 将之前加载的音频数据推送到设备队列中 [F@33:04]。**关键步骤**是，查阅 `SDL_PauseAudioDevice` 的文档后，作者意识到新打开的设备默认是暂停状态，因此必须调用 `SDL_PauseAudioDevice(dev, 0)` （第二个参数为0表示取消暂停）来启动播放 [F@37:48]。\n为了让程序有足够的时间播放音频而不立即退出，代码中还加入了 `SDL_Delay(10000)` 来暂停10秒钟 [F@38:00]。\n\n### 资源清理\n程序最后阶段，按照资源管理的顺序，依次执行了：关闭音频设备 (`SDL_CloseAudioDevice(dev)`)、释放加载WAV文件时分配的内存 (`SDL_FreeWAV(audio_buf)`)，以及退出SDL系统 (`SDL_Quit()`)[F@41:44]。\n\n## 结论\n本视频通过一个完整的实例，清晰地展示了在C语言中使用SDL2库播放WAV音频文件的全流程。核心结论是：通过正确使用SDL提供的音频API（初始化、加载、打开设备、排队、取消暂停），可以较为底层地实现音频播放功能。成功的关键在于仔细查阅并理解官方文档，特别是 `SDL_OpenAudioDevice` 的参数含义，以及不要忘记调用 `SDL_PauseAudioDevice` 来启动播放。\n\n## 复习卡片\n\n**Q1:** 在使用SDL2播放音频前，必须调用哪个函数来初始化音频子系统？\n**A1:** `SDL_InitSubSystem(SDL_INIT_AUDIO)`\n\n**Q2:** `SDL_LoadWAV` 函数需要哪几个指针参数来接收加载结果？\n**A2:** 需要三个指针参数：一个 `SDL_AudioSpec*` 用于接收音频规格，一个 `Uint8**` 用于接收指向音频数据的指针，一个 `Uint32*` 用于接收数据长度。\n\n**Q3:** `SDL_OpenAudioDevice` 函数中，`desired` 和 `obtained` 参数通常如何设置？\n**A3:** 通常将两者指向同一个 `SDL_AudioSpec` 结构体。`desired` 传入期望的格式，SDL会尝试打开设备并将实际使用的格式写回该结构体到 `obtained`。\n\n**Q4:** 使用 `SDL_QueueAudio` 排队音频数据后，音频会自动播放吗？还需要调用什么函数？\n**A4:** 不会自动播放。新打开的音频设备默认处于暂停状态，必须调用 `SDL_PauseAudioDevice(deviceID, 0)` 来取消暂停，音频才会开始播放。\n\n**Q5:** 在程序结束时，为了正确释放资源，清理SDL音频相关资源的函数调用顺序是什么？\n**A5:** 顺序通常为：1. `SDL_CloseAudioDevice` 关闭设备；2. `SDL_FreeWAV` 释放音频数据缓冲区；3. `SDL_Quit` 退出SDL子系统。\n\n**Q6:** `SDL_OpenAudioDevice` 的 `allowed_changes` 参数设为0是什么意思？\n**A6:** 设为0表示不允许SDL对应用请求的音频格式进行任何更改，如果硬件不支持请求的精确格式，则打开设备会失败。\n\n**Q7:** 如何检查 `SDL_LoadWAV` 是否成功加载了文件？\n**A7:** 检查其返回值。`SDL_LoadWAV` 成功时返回一个 `SDL_AudioSpec*` 指针，失败时返回 `NULL`。\n\n**Q8:** 视频中为了防止程序过早退出导致音频无法播放完，使用了哪个函数进行等待？\n**A8:** 使用了 `SDL_Delay(10000)`，即暂停10000毫秒（10秒）。", "transcriptSegments": [{"index": 0, "timestamp": "20:30", "text": "."}, {"index": 1, "timestamp": "20:43", "text": "if your application can only handle one specific data format"}, {"index": 2, "timestamp": "20:46", "text": "pass a zero for a low changes in that as the"}, {"index": 3, "timestamp": "20:49", "text": "as the"}, {"index": 4, "timestamp": "20:50", "text": "as the"}, {"index": 5, "timestamp": "20:52", "text": "as a"}, {"index": 6, "timestamp": "20:53", "text": "as a"}, {"index": 7, "timestamp": "20:56", "text": "as a"}, {"index": 8, "timestamp": "20:57", "text": "as a"}, {"index": 9, "timestamp": "20:59", "text": "as a"}, {"index": 10, "timestamp": "21:00", "text": "as a"}, {"index": 11, "timestamp": "21:01", "text": "as a"}, {"index": 12, "timestamp": "21:02", "text": "as a"}, {"index": 13, "timestamp": "21:03", "text": "as a"}, {"index": 14, "timestamp": "21:04", "text": "as a"}, {"index": 15, "timestamp": "21:05", "text": "as a"}, {"index": 16, "timestamp": "21:06", "text": "as a"}, {"index": 17, "timestamp": "21:07", "text": "as a"}, {"index": 18, "timestamp": "21:08", "text": "as a"}, {"index": 19, "timestamp": "21:09", "text": "as a"}, {"index": 20, "timestamp": "21:10", "text": "as a"}, {"index": 21, "timestamp": "21:11", "text": "as a"}, {"index": 22, "timestamp": "21:12", "text": "as a"}, {"index": 23, "timestamp": "21:13", "text": "as a"}, {"index": 24, "timestamp": "21:14", "text": "as a"}, {"index": 25, "timestamp": "21:15", "text": "as a"}, {"index": 26, "timestamp": "21:16", "text": "as a"}, {"index": 27, "timestamp": "21:17", "text": "as a"}, {"index": 28, "timestamp": "21:18", "text": "as a"}, {"index": 29, "timestamp": "21:19", "text": "as a"}, {"index": 30, "timestamp": "21:20", "text": "as a"}, {"index": 31, "timestamp": "21:21", "text": "as a"}, {"index": 32, "timestamp": "21:22", "text": "as a"}, {"index": 33, "timestamp": "21:23", "text": "as a"}, {"index": 34, "timestamp": "21:24", "text": "as a"}, {"index": 35, "timestamp": "21:25", "text": "as a"}, {"index": 36, "timestamp": "21:26", "text": "as a"}, {"index": 37, "timestamp": "21:27", "text": "as a"}, {"index": 38, "timestamp": "21:28", "text": "The data to cue the device."}, {"index": 39, "timestamp": "22:24", "text": "The data to cue the device."}, {"index": 40, "timestamp": "22:54", "text": "The data to cue the device."}, {"index": 41, "timestamp": "23:22", "text": "The data to cue the device."}, {"index": 42, "timestamp": "23:52", "text": "The data to cue the device."}, {"index": 43, "timestamp": "24:14", "text": "The data to cue the device."}, {"index": 44, "timestamp": "24:44", "text": "The data to cue the device."}, {"index": 45, "timestamp": "25:10", "text": "The data to cue the device."}, {"index": 46, "timestamp": "25:32", "text": "The data to cue the device."}, {"index": 47, "timestamp": "26:02", "text": "The data to cue the device."}, {"index": 48, "timestamp": "26:18", "text": "The data to cue the device."}, {"index": 49, "timestamp": "26:48", "text": "The data to cue the device."}, {"index": 50, "timestamp": "27:14", "text": "The data to cue the device."}, {"index": 51, "timestamp": "27:44", "text": "The data to cue the device."}, {"index": 52, "timestamp": "28:06", "text": "The data to cue the device."}, {"index": 53, "timestamp": "28:32", "text": "The data to cue the device."}, {"index": 54, "timestamp": "28:58", "text": "The data to cue the device."}, {"index": 55, "timestamp": "29:28", "text": "The data to cue the device."}, {"index": 56, "timestamp": "29:50", "text": "The data to cue the device."}, {"index": 57, "timestamp": "30:20", "text": "The data to cue the device."}, {"index": 58, "timestamp": "30:42", "text": "The data to cue the device."}, {"index": 59, "timestamp": "31:12", "text": "The data to cue the device."}, {"index": 60, "timestamp": "31:40", "text": "The data to cue the device."}, {"index": 61, "timestamp": "32:08", "text": "The data to cue the device."}, {"index": 62, "timestamp": "32:38", "text": "The data to cue the device."}, {"index": 63, "timestamp": "33:04", "text": "The data to cue the device."}, {"index": 64, "timestamp": "33:32", "text": "The data to cue the device."}, {"index": 65, "timestamp": "33:54", "text": "The data to cue the device."}, {"index": 66, "timestamp": "34:20", "text": "The data to cue the device."}, {"index": 67, "timestamp": "34:46", "text": "The data to cue the device."}], "cards": [{"type": "qa", "question": "在使用SDL2播放音频前，必须调用哪个函数来初始化音频子系统？", "answer": "`SDL_InitSubSystem(SDL_INIT_AUDIO)`", "difficulty": 3, "bloom_level": "understand", "source_refs": [], "id": "qa_1"}, {"type": "qa", "question": "`SDL_LoadWAV` 函数需要哪几个指针参数来接收加载结果？", "answer": "需要三个指针参数：一个 `SDL_AudioSpec*` 用于接收音频规格，一个 `Uint8**` 用于接收指向音频数据的指针，一个 `Uint32*` 用于接收数据长度。", "difficulty": 3, "bloom_level": "understand", "source_refs": [], "id": "qa_2"}, {"type": "qa", "question": "`SDL_OpenAudioDevice` 函数中，`desired` 和 `obtained` 参数通常如何设置？", "answer": "通常将两者指向同一个 `SDL_AudioSpec` 结构体。`desired` 传入期望的格式，SDL会尝试打开设备并将实际使用的格式写回该结构体到 `obtained`。", "difficulty": 3, "bloom_level": "understand", "source_refs": [], "id": "qa_3"}, {"type": "qa", "question": "使用 `SDL_QueueAudio` 排队音频数据后，音频会自动播放吗？还需要调用什么函数？", "answer": "不会自动播放。新打开的音频设备默认处于暂停状态，必须调用 `SDL_PauseAudioDevice(deviceID, 0)` 来取消暂停，音频才会开始播放。", "difficulty": 3, "bloom_level": "understand", "source_refs": [], "id": "qa_4"}, {"type": "qa", "question": "在程序结束时，为了正确释放资源，清理SDL音频相关资源的函数调用顺序是什么？", "answer": "顺序通常为：1. `SDL_CloseAudioDevice` 关闭设备；2. `SDL_FreeWAV` 释放音频数据缓冲区；3. `SDL_Quit` 退出SDL子系统。", "difficulty": 3, "bloom_level": "understand", "source_refs": [], "id": "qa_5"}, {"type": "qa", "question": "`SDL_OpenAudioDevice` 的 `allowed_changes` 参数设为0是什么意思？", "answer": "设为0表示不允许SDL对应用请求的音频格式进行任何更改，如果硬件不支持请求的精确格式，则打开设备会失败。", "difficulty": 3, "bloom_level": "understand", "source_refs": [], "id": "qa_6"}, {"type": "qa", "question": "如何检查 `SDL_LoadWAV` 是否成功加载了文件？", "answer": "检查其返回值。`SDL_LoadWAV` 成功时返回一个 `SDL_AudioSpec*` 指针，失败时返回 `NULL`。", "difficulty": 3, "bloom_level": "understand", "source_refs": [], "id": "qa_7"}, {"type": "qa", "question": "视频中为了防止程序过早退出导致音频无法播放完，使用了哪个函数进行等待？", "answer": "使用了 `SDL_Delay(10000)`，即暂停10000毫秒（10秒）。", "difficulty": 3, "bloom_level": "understand", "source_refs": [], "id": "qa_8"}, {"id": "q1_init", "type": "choice", "difficulty": 1, "bloom_level": "remember", "source_refs": ["F@20:52"], "question": "在使用SDL2库播放音频前，必须首先调用哪个函数来初始化音频子系统？", "options": ["A. SDL_Init(SDL_INIT_AUDIO)", "B. SDL_InitSubSystem(SDL_INIT_AUDIO)", "C. SDL_OpenAudioSubSystem()", "D. SDL_CreateAudioDevice()"], "correct_index": 1, "explanation": "根据教程，正确的第一步是调用SDL_InitSubSystem(SDL_INIT_AUDIO)。SDL_Init通常用于初始化所有子系统，但为了只初始化音频，应使用SDL_InitSubSystem。"}, {"id": "q2_load_wav", "type": "choice", "difficulty": 2, "bloom_level": "understand", "source_refs": ["F@21:00", "F@22:34"], "question": "SDL_LoadWAV函数成功加载文件后，其返回值是什么？程序员应如何判断加载是否成功？", "options": ["A. 返回音频数据长度，长度为0表示失败", "B. 返回一个SDL_AudioSpec*指针，为NULL表示失败", "C. 返回一个布尔值，true表示成功", "D. 返回一个指向音频缓冲区的指针，为NULL表示失败"], "correct_index": 1, "explanation": "SDL_LoadWAV函数在成功时返回一个SDL_AudioSpec*指针（指向一个描述音频格式的结构体），失败时返回NULL。程序员应通过检查该指针是否为NULL来判断加载是否成功。"}, {"id": "q3_open_dev", "type": "choice", "difficulty": 3, "bloom_level": "understand", "source_refs": ["F@23:22", "F@24:37", "S0-S2"], "question": "SDL_OpenAudioDevice函数的`allowed_changes`参数被设置为0，这意味着什么？", "options": ["A. 允许SDL任意调整音频格式以适应硬件", "B. 完全不允许SDL改变应用请求的音频格式，若硬件不支持则打开失败", "C. 表示该参数未被使用", "D. 表示只允许改变采样率"], "correct_index": 1, "explanation": "根据文档和转录文本（S0-S2），将`allowed_changes`设为0意味着不允许SDL对应用程序指定的期望格式（`desired`）进行任何更改。如果硬件不支持该精确格式，则设备打开可能会失败。"}, {"id": "q4_play_start", "type": "choice", "difficulty": 2, "bloom_level": "apply", "source_refs": ["F@33:04", "F@37:48"], "question": "使用SDL_QueueAudio将音频数据推送到设备队列后，音频是否会自动开始播放？为了开始播放，还必须调用什么函数？", "options": ["A. 会自动播放，无需额外操作", "B. 不会自动播放，必须调用SDL_PlayAudioDevice(dev)", "C. 不会自动播放，必须调用SDL_PauseAudioDevice(dev, 0)", "D. 不会自动播放，必须调用SDL_AudioDevicePlay(dev)"], "correct_index": 2, "explanation": "新打开的音频设备默认处于“暂停”状态。虽然数据已被排队，但要开始播放，必须显式地调用SDL_PauseAudioDevice(dev, 0)来取消暂停。第二个参数0表示“取消暂停”（播放），而1表示“暂停”。"}, {"id": "q5_cleanup", "type": "choice", "difficulty": 2, "bloom_level": "apply", "source_refs": ["F@41:44"], "question": "在程序结束时，为了正确释放SDL音频资源，以下哪个是正确的调用顺序？", "options": ["A. SDL_FreeWAV -> SDL_Quit -> SDL_CloseAudioDevice", "B. SDL_CloseAudioDevice -> SDL_Quit -> SDL_FreeWAV", "C. SDL_Quit -> SDL_FreeWAV -> SDL_CloseAudioDevice", "D. SDL_CloseAudioDevice -> SDL_FreeWAV -> SDL_Quit"], "correct_index": 3, "explanation": "资源清理应遵循“先使用后释放”的逆序。正确的顺序是：1. 关闭音频设备（SDL_CloseAudioDevice），2. 释放加载WAV文件时分配的内存（SDL_FreeWAV），3. 最后退出SDL系统（SDL_Quit）。"}, {"id": "fb1_init", "type": "fill_blank", "difficulty": 1, "bloom_level": "remember", "source_refs": ["F@20:52"], "template": "在使用SDL音频功能前，必须通过调用 ___(SDL_INIT_AUDIO) 来初始化音频子系统。", "blanks": [{"position": 0, "answer": "SDL_InitSubSystem"}]}, {"id": "fb2_load_wav", "type": "fill_blank", "difficulty": 2, "bloom_level": "remember", "source_refs": ["F@21:00", "F@22:34"], "template": "SDL_LoadWAV函数需要三个指针参数：一个 ___ 用于接收音频格式，一个 Uint8** 用于接收音频数据缓冲区指针，一个 Uint32* 用于接收数据长度。", "blanks": [{"position": 0, "answer": "SDL_AudioSpec*"}]}, {"id": "fb3_pause_dev", "type": "fill_blank", "difficulty": 2, "bloom_level": "understand", "source_refs": ["F@37:48"], "template": "新打开的SDL音频设备默认处于暂停状态。要取消暂停并开始播放，需要调用 SDL_PauseAudioDevice(dev, ___)。", "blanks": [{"position": 0, "answer": "0"}]}, {"id": "fb4_free", "type": "fill_blank", "difficulty": 1, "bloom_level": "remember", "source_refs": ["F@41:44"], "template": "程序结束前，用于释放由SDL_LoadWAV加载的音频数据缓冲区的函数是 ___。", "blanks": [{"position": 0, "answer": "SDL_FreeWAV"}]}, {"id": "exp1_allowed_changes", "type": "explain", "difficulty": 4, "bloom_level": "analyze", "source_refs": ["F@23:22", "F@24:37", "S0-S2"], "concept": "SDL_OpenAudioDevice的allowed_changes参数", "prompt": "请用自己的话解释SDL_OpenAudioDevice函数中`allowed_changes`参数的作用，并说明将其设置为0对程序行为可能产生的影响。", "evaluation_criteria": ["能正确说明该参数用于控制SDL在打开设备时是否可以对期望的音频格式进行微调", "能准确解释设为0意味着“不允许更改”", "能结合场景说明可能导致的后果（如设备打开失败）"]}, {"id": "exp2_pause", "type": "explain", "difficulty": 3, "bloom_level": "understand", "source_refs": ["F@37:48"], "concept": "SDL_PauseAudioDevice的必要性", "prompt": "在用SDL_QueueAudio将数据推送到设备队列后，为什么通常还需要调用SDL_PauseAudioDevice？请解释其背后的机制。", "evaluation_criteria": ["能指出新打开的设备默认处于暂停状态", "能说明SDL_PauseAudioDevice(dev, 0)的作用是“取消暂停/启动播放”", "能理解这是SDL音频“推送”模型工作流程的一部分"]}, {"id": "exp3_load_wav_check", "type": "explain", "difficulty": 3, "bloom_level": "apply", "source_refs": ["F@22:34"], "concept": "SDL_LoadWAV返回值检查", "prompt": "为什么在使用SDL_LoadWAV函数后必须检查其返回值？不检查会导致什么问题？", "evaluation_criteria": ["能说明SDL_LoadWAV可能因文件路径错误、文件格式不支持等原因加载失败", "知道失败时返回NULL", "能指出不检查就使用返回的指针可能导致空指针解引用、程序崩溃等严重错误"]}, {"id": "exp4_desired_obtained", "type": "explain", "difficulty": 4, "bloom_level": "understand", "source_refs": ["F@23:22", "F@24:37", "F@28:08"], "concept": "desired和obtained参数", "prompt": "在SDL_OpenAudioDevice函数中，`desired`和`obtained`参数分别有什么作用？视频中作者为什么将同一个变量同时用于这两个参数？", "evaluation_criteria": ["能解释`desired`是应用程序希望的音频格式", "能解释`obtained`是SDL实际提供的音频格式", "能理解作者这样做（传入同一个指针）是为了用加载WAV获得的格式作为期望值，并在设备打开后直接更新该变量以获得实际格式"]}, {"id": "qa1_init", "type": "qa", "difficulty": 1, "bloom_level": "remember", "source_refs": ["F@20:52"], "question": "在使用SDL播放音频的程序中，第一步应该调用哪个函数来初始化音频子系统？", "answer": "SDL_InitSubSystem(SDL_INIT_AUDIO)"}, {"id": "qa2_load_wav_params", "type": "qa", "difficulty": 2, "bloom_level": "remember", "source_refs": ["F@21:00"], "question": "SDL_LoadWAV函数需要哪几个指针参数来接收加载结果？", "answer": "需要三个指针参数：一个SDL_AudioSpec*用于接收音频格式，一个Uint8**用于接收指向音频数据缓冲区的指针，一个Uint32*用于接收音频数据的长度。"}, {"id": "qa3_full_flow", "type": "qa", "difficulty": 3, "bloom_level": "apply", "source_refs": ["F@20:52", "F@21:00", "F@23:22", "F@33:04", "F@37:48", "F@41:44"], "question": "请列出在C语言中使用SDL2播放一个WAV文件的核心API调用顺序（按步骤）。", "answer": "1. SDL_InitSubSystem(SDL_INIT_AUDIO) 初始化音频子系统。2. SDL_LoadWAV() 加载WAV文件。3. SDL_OpenAudioDevice() 打开音频设备。4. SDL_QueueAudio() 将音频数据排队。5. SDL_PauseAudioDevice(dev, 0) 取消暂停以开始播放。6. （可选）SDL_Delay() 等待播放完成。7. 清理：SDL_CloseAudioDevice(), SDL_FreeWAV(), SDL_Quit()。"}, {"id": "qa4_design_choice", "type": "qa", "difficulty": 5, "bloom_level": "analyze", "source_refs": ["F@28:08", "F@29:44"], "question": "在视频的代码中，作者将`SDL_LoadWAV`返回的`SDL_AudioSpec*`指针（名为`return_spec`）同时用于`SDL_OpenAudioDevice`的`desired`和`obtained`参数。你认为这种设计选择有什么好处？可能存在什么潜在问题？", "answer": "好处：1. 简化了变量声明，代码更简洁。2. 逻辑上很清晰，因为`return_spec`就是从WAV文件获得的“期望”格式，同时让它接收“获得”的格式，使得该结构体最终保存了设备实际使用的格式，可用于后续可能的需求。潜在问题：如果后续代码在调用`SDL_OpenAudioDevice`后，仍然需要访问原始的、文件加载时的格式信息，那么这种方法会丢失该信息，因为`return_spec`的内容已被SDL修改。"}], "frames": [], "metadata": {"title": "【中文字幕】从零开始用 C 处理音频｜SDL 音频", "duration": 2103.815, "thumbnail": "http://i1.hdslb.com/bfs/archive/315a8249c48cdf87fe77cbed28b2060696253128.jpg", "uploader": "RookieOnline菜鸟在线", "video_id": "BV1UyL26XEP8", "description": "Playing Audio in C from Scratch ｜ SDL Audio", "tags": ["bilibili高考季", "C语言", "编程", "RookieOnline菜鸟在线", "数据结构", "C/C++", "【中文字幕】", "Linux", "Coding", "ArrayList"], "view_count": 606, "like_count": 19, "upload_date": "20260520", "transcript_segments": [{"start": 1230.0, "end": 1243.0, "text": "."}, {"start": 1243.0, "end": 1246.8, "text": "if your application can only handle one specific data format"}, {"start": 1246.8, "end": 1249.0, "text": "pass a zero for a low changes in that as the"}, {"start": 1249.0, "end": 1250.0, "text": "as the"}, {"start": 1250.0, "end": 1252.0, "text": "as the"}, {"start": 1252.0, "end": 1253.0, "text": "as a"}, {"start": 1253.0, "end": 1256.0, "text": "as a"}, {"start": 1256.0, "end": 1257.0, "text": "as a"}, {"start": 1257.0, "end": 1259.0, "text": "as a"}, {"start": 1259.0, "end": 1260.0, "text": "as a"}, {"start": 1260.0, "end": 1261.0, "text": "as a"}, {"start": 1261.0, "end": 1262.0, "text": "as a"}, {"start": 1262.0, "end": 1263.0, "text": "as a"}, {"start": 1263.0, "end": 1264.0, "text": "as a"}, {"start": 1264.0, "end": 1265.0, "text": "as a"}, {"start": 1265.0, "end": 1266.0, "text": "as a"}, {"start": 1266.0, "end": 1267.0, "text": "as a"}, {"start": 1267.0, "end": 1268.0, "text": "as a"}, {"start": 1268.0, "end": 1269.0, "text": "as a"}, {"start": 1269.0, "end": 1270.0, "text": "as a"}, {"start": 1270.0, "end": 1271.0, "text": "as a"}, {"start": 1271.0, "end": 1272.0, "text": "as a"}, {"start": 1272.0, "end": 1273.0, "text": "as a"}, {"start": 1273.0, "end": 1274.0, "text": "as a"}, {"start": 1274.0, "end": 1275.0, "text": "as a"}, {"start": 1275.0, "end": 1276.0, "text": "as a"}, {"start": 1276.0, "end": 1277.0, "text": "as a"}, {"start": 1277.0, "end": 1278.0, "text": "as a"}, {"start": 1278.0, "end": 1279.0, "text": "as a"}, {"start": 1279.0, "end": 1280.0, "text": "as a"}, {"start": 1280.0, "end": 1281.0, "text": "as a"}, {"start": 1281.0, "end": 1282.0, "text": "as a"}, {"start": 1282.0, "end": 1283.0, "text": "as a"}, {"start": 1283.0, "end": 1284.0, "text": "as a"}, {"start": 1284.0, "end": 1285.0, "text": "as a"}, {"start": 1285.0, "end": 1286.0, "text": "as a"}, {"start": 1286.0, "end": 1287.0, "text": "as a"}, {"start": 1287.0, "end": 1288.0, "text": "as a"}, {"start": 1288.0, "end": 1314.0, "text": "The data to cue the device."}, {"start": 1344.0, "end": 1364.0, "text": "The data to cue the device."}, {"start": 1374.0, "end": 1402.0, "text": "The data to cue the device."}, {"start": 1402.0, "end": 1430.0, "text": "The data to cue the device."}, {"start": 1432.0, "end": 1454.0, "text": "The data to cue the device."}, {"start": 1454.0, "end": 1482.0, "text": "The data to cue the device."}, {"start": 1484.0, "end": 1510.0, "text": "The data to cue the device."}, {"start": 1510.0, "end": 1532.0, "text": "The data to cue the device."}, {"start": 1532.0, "end": 1560.0, "text": "The data to cue the device."}, {"start": 1562.0, "end": 1578.0, "text": "The data to cue the device."}, {"start": 1578.0, "end": 1606.0, "text": "The data to cue the device."}, {"start": 1608.0, "end": 1634.0, "text": "The data to cue the device."}, {"start": 1634.0, "end": 1662.0, "text": "The data to cue the device."}, {"start": 1664.0, "end": 1686.0, "text": "The data to cue the device."}, {"start": 1686.0, "end": 1712.0, "text": "The data to cue the device."}, {"start": 1712.0, "end": 1738.0, "text": "The data to cue the device."}, {"start": 1738.0, "end": 1766.0, "text": "The data to cue the device."}, {"start": 1768.0, "end": 1790.0, "text": "The data to cue the device."}, {"start": 1790.0, "end": 1818.0, "text": "The data to cue the device."}, {"start": 1820.0, "end": 1842.0, "text": "The data to cue the device."}, {"start": 1842.0, "end": 1870.0, "text": "The data to cue the device."}, {"start": 1872.0, "end": 1900.0, "text": "The data to cue the device."}, {"start": 1900.0, "end": 1928.0, "text": "The data to cue the device."}, {"start": 1928.0, "end": 1956.0, "text": "The data to cue the device."}, {"start": 1958.0, "end": 1984.0, "text": "The data to cue the device."}, {"start": 1984.0, "end": 2012.0, "text": "The data to cue the device."}, {"start": 2012.0, "end": 2034.0, "text": "The data to cue the device."}, {"start": 2034.0, "end": 2060.0, "text": "The data to cue the device."}, {"start": 2060.0, "end": 2086.0, "text": "The data to cue the device."}, {"start": 2086.0, "end": 2106.0, "text": "The data to cue the device."}], "content_type": "general", "language": "zh", "questions": [{"id": "q1_init", "type": "choice", "difficulty": 1, "bloom_level": "remember", "source_refs": ["F@20:52"], "question": "在使用SDL2库播放音频前，必须首先调用哪个函数来初始化音频子系统？", "options": ["A. SDL_Init(SDL_INIT_AUDIO)", "B. SDL_InitSubSystem(SDL_INIT_AUDIO)", "C. SDL_OpenAudioSubSystem()", "D. SDL_CreateAudioDevice()"], "correct_index": 1, "explanation": "根据教程，正确的第一步是调用SDL_InitSubSystem(SDL_INIT_AUDIO)。SDL_Init通常用于初始化所有子系统，但为了只初始化音频，应使用SDL_InitSubSystem。"}, {"id": "q2_load_wav", "type": "choice", "difficulty": 2, "bloom_level": "understand", "source_refs": ["F@21:00", "F@22:34"], "question": "SDL_LoadWAV函数成功加载文件后，其返回值是什么？程序员应如何判断加载是否成功？", "options": ["A. 返回音频数据长度，长度为0表示失败", "B. 返回一个SDL_AudioSpec*指针，为NULL表示失败", "C. 返回一个布尔值，true表示成功", "D. 返回一个指向音频缓冲区的指针，为NULL表示失败"], "correct_index": 1, "explanation": "SDL_LoadWAV函数在成功时返回一个SDL_AudioSpec*指针（指向一个描述音频格式的结构体），失败时返回NULL。程序员应通过检查该指针是否为NULL来判断加载是否成功。"}, {"id": "q3_open_dev", "type": "choice", "difficulty": 3, "bloom_level": "understand", "source_refs": ["F@23:22", "F@24:37", "S0-S2"], "question": "SDL_OpenAudioDevice函数的`allowed_changes`参数被设置为0，这意味着什么？", "options": ["A. 允许SDL任意调整音频格式以适应硬件", "B. 完全不允许SDL改变应用请求的音频格式，若硬件不支持则打开失败", "C. 表示该参数未被使用", "D. 表示只允许改变采样率"], "correct_index": 1, "explanation": "根据文档和转录文本（S0-S2），将`allowed_changes`设为0意味着不允许SDL对应用程序指定的期望格式（`desired`）进行任何更改。如果硬件不支持该精确格式，则设备打开可能会失败。"}, {"id": "q4_play_start", "type": "choice", "difficulty": 2, "bloom_level": "apply", "source_refs": ["F@33:04", "F@37:48"], "question": "使用SDL_QueueAudio将音频数据推送到设备队列后，音频是否会自动开始播放？为了开始播放，还必须调用什么函数？", "options": ["A. 会自动播放，无需额外操作", "B. 不会自动播放，必须调用SDL_PlayAudioDevice(dev)", "C. 不会自动播放，必须调用SDL_PauseAudioDevice(dev, 0)", "D. 不会自动播放，必须调用SDL_AudioDevicePlay(dev)"], "correct_index": 2, "explanation": "新打开的音频设备默认处于“暂停”状态。虽然数据已被排队，但要开始播放，必须显式地调用SDL_PauseAudioDevice(dev, 0)来取消暂停。第二个参数0表示“取消暂停”（播放），而1表示“暂停”。"}, {"id": "q5_cleanup", "type": "choice", "difficulty": 2, "bloom_level": "apply", "source_refs": ["F@41:44"], "question": "在程序结束时，为了正确释放SDL音频资源，以下哪个是正确的调用顺序？", "options": ["A. SDL_FreeWAV -> SDL_Quit -> SDL_CloseAudioDevice", "B. SDL_CloseAudioDevice -> SDL_Quit -> SDL_FreeWAV", "C. SDL_Quit -> SDL_FreeWAV -> SDL_CloseAudioDevice", "D. SDL_CloseAudioDevice -> SDL_FreeWAV -> SDL_Quit"], "correct_index": 3, "explanation": "资源清理应遵循“先使用后释放”的逆序。正确的顺序是：1. 关闭音频设备（SDL_CloseAudioDevice），2. 释放加载WAV文件时分配的内存（SDL_FreeWAV），3. 最后退出SDL系统（SDL_Quit）。"}, {"id": "fb1_init", "type": "fill_blank", "difficulty": 1, "bloom_level": "remember", "source_refs": ["F@20:52"], "template": "在使用SDL音频功能前，必须通过调用 ___(SDL_INIT_AUDIO) 来初始化音频子系统。", "blanks": [{"position": 0, "answer": "SDL_InitSubSystem"}]}, {"id": "fb2_load_wav", "type": "fill_blank", "difficulty": 2, "bloom_level": "remember", "source_refs": ["F@21:00", "F@22:34"], "template": "SDL_LoadWAV函数需要三个指针参数：一个 ___ 用于接收音频格式，一个 Uint8** 用于接收音频数据缓冲区指针，一个 Uint32* 用于接收数据长度。", "blanks": [{"position": 0, "answer": "SDL_AudioSpec*"}]}, {"id": "fb3_pause_dev", "type": "fill_blank", "difficulty": 2, "bloom_level": "understand", "source_refs": ["F@37:48"], "template": "新打开的SDL音频设备默认处于暂停状态。要取消暂停并开始播放，需要调用 SDL_PauseAudioDevice(dev, ___)。", "blanks": [{"position": 0, "answer": "0"}]}, {"id": "fb4_free", "type": "fill_blank", "difficulty": 1, "bloom_level": "remember", "source_refs": ["F@41:44"], "template": "程序结束前，用于释放由SDL_LoadWAV加载的音频数据缓冲区的函数是 ___。", "blanks": [{"position": 0, "answer": "SDL_FreeWAV"}]}, {"id": "exp1_allowed_changes", "type": "explain", "difficulty": 4, "bloom_level": "analyze", "source_refs": ["F@23:22", "F@24:37", "S0-S2"], "concept": "SDL_OpenAudioDevice的allowed_changes参数", "prompt": "请用自己的话解释SDL_OpenAudioDevice函数中`allowed_changes`参数的作用，并说明将其设置为0对程序行为可能产生的影响。", "evaluation_criteria": ["能正确说明该参数用于控制SDL在打开设备时是否可以对期望的音频格式进行微调", "能准确解释设为0意味着“不允许更改”", "能结合场景说明可能导致的后果（如设备打开失败）"]}, {"id": "exp2_pause", "type": "explain", "difficulty": 3, "bloom_level": "understand", "source_refs": ["F@37:48"], "concept": "SDL_PauseAudioDevice的必要性", "prompt": "在用SDL_QueueAudio将数据推送到设备队列后，为什么通常还需要调用SDL_PauseAudioDevice？请解释其背后的机制。", "evaluation_criteria": ["能指出新打开的设备默认处于暂停状态", "能说明SDL_PauseAudioDevice(dev, 0)的作用是“取消暂停/启动播放”", "能理解这是SDL音频“推送”模型工作流程的一部分"]}, {"id": "exp3_load_wav_check", "type": "explain", "difficulty": 3, "bloom_level": "apply", "source_refs": ["F@22:34"], "concept": "SDL_LoadWAV返回值检查", "prompt": "为什么在使用SDL_LoadWAV函数后必须检查其返回值？不检查会导致什么问题？", "evaluation_criteria": ["能说明SDL_LoadWAV可能因文件路径错误、文件格式不支持等原因加载失败", "知道失败时返回NULL", "能指出不检查就使用返回的指针可能导致空指针解引用、程序崩溃等严重错误"]}, {"id": "exp4_desired_obtained", "type": "explain", "difficulty": 4, "bloom_level": "understand", "source_refs": ["F@23:22", "F@24:37", "F@28:08"], "concept": "desired和obtained参数", "prompt": "在SDL_OpenAudioDevice函数中，`desired`和`obtained`参数分别有什么作用？视频中作者为什么将同一个变量同时用于这两个参数？", "evaluation_criteria": ["能解释`desired`是应用程序希望的音频格式", "能解释`obtained`是SDL实际提供的音频格式", "能理解作者这样做（传入同一个指针）是为了用加载WAV获得的格式作为期望值，并在设备打开后直接更新该变量以获得实际格式"]}, {"id": "qa1_init", "type": "qa", "difficulty": 1, "bloom_level": "remember", "source_refs": ["F@20:52"], "question": "在使用SDL播放音频的程序中，第一步应该调用哪个函数来初始化音频子系统？", "answer": "SDL_InitSubSystem(SDL_INIT_AUDIO)"}, {"id": "qa2_load_wav_params", "type": "qa", "difficulty": 2, "bloom_level": "remember", "source_refs": ["F@21:00"], "question": "SDL_LoadWAV函数需要哪几个指针参数来接收加载结果？", "answer": "需要三个指针参数：一个SDL_AudioSpec*用于接收音频格式，一个Uint8**用于接收指向音频数据缓冲区的指针，一个Uint32*用于接收音频数据的长度。"}, {"id": "qa3_full_flow", "type": "qa", "difficulty": 3, "bloom_level": "apply", "source_refs": ["F@20:52", "F@21:00", "F@23:22", "F@33:04", "F@37:48", "F@41:44"], "question": "请列出在C语言中使用SDL2播放一个WAV文件的核心API调用顺序（按步骤）。", "answer": "1. SDL_InitSubSystem(SDL_INIT_AUDIO) 初始化音频子系统。2. SDL_LoadWAV() 加载WAV文件。3. SDL_OpenAudioDevice() 打开音频设备。4. SDL_QueueAudio() 将音频数据排队。5. SDL_PauseAudioDevice(dev, 0) 取消暂停以开始播放。6. （可选）SDL_Delay() 等待播放完成。7. 清理：SDL_CloseAudioDevice(), SDL_FreeWAV(), SDL_Quit()。"}, {"id": "qa4_design_choice", "type": "qa", "difficulty": 5, "bloom_level": "analyze", "source_refs": ["F@28:08", "F@29:44"], "question": "在视频的代码中，作者将`SDL_LoadWAV`返回的`SDL_AudioSpec*`指针（名为`return_spec`）同时用于`SDL_OpenAudioDevice`的`desired`和`obtained`参数。你认为这种设计选择有什么好处？可能存在什么潜在问题？", "answer": "好处：1. 简化了变量声明，代码更简洁。2. 逻辑上很清晰，因为`return_spec`就是从WAV文件获得的“期望”格式，同时让它接收“获得”的格式，使得该结构体最终保存了设备实际使用的格式，可用于后续可能的需求。潜在问题：如果后续代码在调用`SDL_OpenAudioDevice`后，仍然需要访问原始的、文件加载时的格式信息，那么这种方法会丢失该信息，因为`return_spec`的内容已被SDL修改。"}], "metrics": {"download": {"duration_ms": 25663, "file_size_bytes": 67321934, "cached": false}, "transcribe": {"duration_ms": 316901, "text_length": 1670}, "extract_frames": {"duration_ms": 106288, "frame_count": 60}, "classify": {"duration_ms": 61064, "api_calls": 1}, "summarize": {"duration_ms": 111807, "api_calls": 1}, "generate_questions": {"duration_ms": 81085, "api_calls": 1}, "total_duration_ms": 703027}}};
+
+// ===== DOM Helpers =====
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+
+// ===== Tab Navigation =====
+$$('.nav-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    $$('.nav-tab').forEach(t => t.classList.remove('active'));
+    $$('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    $(`#panel-${tab.dataset.tab}`).classList.add('active');
+  });
+});
+
+// ===== Simple Markdown Renderer =====
+function renderMarkdown(md) {
+  if (!md) return '';
+  return md
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/\[S(\d+(?:\s*[-,]\s*\d+)*)\]/g, '<a class="seg-cite" data-seg="$1" title="Jump to transcript segment">[S$1]</a>')
+    .replace(/\[F@(\d{2}:\d{2})\]/g, '<a class="frame-cite" data-ts="$1" title="View frame at $1">[F@$1]</a>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+    .replace(/\n{2,}/g, '</p><p>')
+    .replace(/\n/g, '<br>')
+    .replace(/^/, '<p>').replace(/$/, '</p>');
+}
+
+// ===== Summary Rendering =====
+const summaryEl = $('#summary-content');
+// Strip review cards section from displayed summary
+const summaryForDisplay = DATA.summary.replace(/##\s*(?:复习卡片|Review Cards)[\s\S]*$/i, '').trim();
+summaryEl.innerHTML = renderMarkdown(summaryForDisplay);
+
+// ===== Citation click → jump to transcript segment =====
+summaryEl.addEventListener('click', e => {
+  const cite = e.target.closest('.seg-cite');
+  if (cite) {
+    e.preventDefault();
+    const segRef = cite.dataset.seg.replace(/\s/g, '');
+    const firstSeg = parseInt(segRef.split(/[-,]/)[0]);
+    if (isNaN(firstSeg)) return;
+    $$('.nav-tab').forEach(t => t.classList.remove('active'));
+    $$('.panel').forEach(p => p.classList.remove('active'));
+    $('[data-tab="transcript"]').classList.add('active');
+    $('#panel-transcript').classList.add('active');
+    const segEl = document.querySelector(`.transcript-seg[data-idx="${firstSeg}"]`);
+    if (segEl) {
+      segEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      segEl.classList.add('highlight');
+      setTimeout(() => segEl.classList.remove('highlight'), 3000);
+    }
+    return;
+  }
+  // Frame citation → find nearest frame and show in lightbox
+  const frameCite = e.target.closest('.frame-cite');
+  if (frameCite) {
+    e.preventDefault();
+    const ts = frameCite.dataset.ts;
+    if (!ts || !DATA.frames || !DATA.frames.length) return;
+    const parts = ts.split(':');
+    const targetSec = parseInt(parts[0]) * 60 + parseInt(parts[1]);
+    let best = null, bestDist = Infinity;
+    DATA.frames.forEach((f, i) => {
+      if (!f.timestamp) return;
+      const fp = f.timestamp.split(':');
+      const fSec = parseInt(fp[0]) * 60 + parseInt(fp[1]);
+      const dist = Math.abs(fSec - targetSec);
+      if (dist < bestDist) { bestDist = dist; best = i; }
+    });
+    if (best !== null) openLightbox(best);
+  }
+});
+
+// ===== Search =====
+function setupSearch(inputId, countId, prevId, nextId, targetEl) {
+  const input = $(`#${inputId}`);
+  const countEl = $(`#${countId}`);
+  const prevBtn = $(`#${prevId}`);
+  const nextBtn = $(`#${nextId}`);
+  let marks = [];
+  let currentIdx = -1;
+
+  function doSearch() {
+    // Remove old marks
+    targetEl.querySelectorAll('mark').forEach(m => {
+      const t = document.createTextNode(m.textContent);
+      m.parentNode.replaceChild(t, m);
+      m.parentNode.normalize();
+    });
+    marks = [];
+    currentIdx = -1;
+    const q = input.value.trim();
+    if (!q) { countEl.textContent = ''; return; }
+
+    const walker = document.createTreeWalker(targetEl, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+
+    nodes.forEach(node => {
+      const text = node.textContent;
+      if (!re.test(text)) return;
+      re.lastIndex = 0;
+      const frag = document.createDocumentFragment();
+      let last = 0;
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+        const mark = document.createElement('mark');
+        mark.textContent = m[0];
+        frag.appendChild(mark);
+        marks.push(mark);
+        last = re.lastIndex;
+      }
+      if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+      node.parentNode.replaceChild(frag, node);
+    });
+
+    countEl.textContent = marks.length ? `0/${marks.length}` : 'No results';
+    if (marks.length) navigateSearch(1);
+  }
+
+  function navigateSearch(dir) {
+    if (!marks.length) return;
+    if (currentIdx >= 0) marks[currentIdx].classList.remove('current');
+    currentIdx = (currentIdx + dir + marks.length) % marks.length;
+    marks[currentIdx].classList.add('current');
+    marks[currentIdx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    countEl.textContent = `${currentIdx + 1}/${marks.length}`;
+  }
+
+  input.addEventListener('input', doSearch);
+  prevBtn.addEventListener('click', () => navigateSearch(-1));
+  nextBtn.addEventListener('click', () => navigateSearch(1));
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') navigateSearch(e.shiftKey ? -1 : 1);
+  });
+}
+
+setupSearch('search-input', 'search-count', 'search-prev', 'search-next', summaryEl);
+
+// ===== Cards =====
+const SRS_KEY = `review_${DATA.taskId}`;
+function loadSRS() { try { return JSON.parse(localStorage.getItem(SRS_KEY)) || {}; } catch { return {}; } }
+function saveSRS(data) { localStorage.setItem(SRS_KEY, JSON.stringify(data)); }
+
+function today() { return new Date().toISOString().slice(0, 10); }
+
+function initCardState(idx) {
+  return { ease: 2.5, interval: 0, due: today(), reviews: 0 };
+}
+
+function sm2(card, quality) {
+  if (quality < 2) { card.interval = 0; card.reviews = 0; }
+  else {
+    if (card.reviews === 0) card.interval = 1;
+    else if (card.reviews === 1) card.interval = 6;
+    else card.interval = Math.round(card.interval * card.ease);
+    card.reviews++;
+  }
+  card.ease = Math.max(1.3, card.ease + (0.1 - (3 - quality) * (0.08 + (3 - quality) * 0.02)));
+  const d = new Date();
+  d.setDate(d.getDate() + card.interval);
+  card.due = d.toISOString().slice(0, 10);
+}
+
+function getDueCards() {
+  const srs = loadSRS();
+  const t = today();
+  return DATA.cards.map((c, i) => {
+    const state = srs[i] || initCardState(i);
+    return { ...c, idx: i, state, isDue: state.due <= t };
+  });
+}
+
+const TYPE_LABELS = {qa:'Q&A',true_false:'判断',choice:'选择',fill_blank:'填空',sequencing:'排序',matching:'配对',code:'代码',scenario:'场景',explain:'解释',comparison:'对比'};
+let activeTypeFilter = 'all';
+
+function renderTypeFilters() {
+  const container = $('#type-filters');
+  if (!container) return;
+  const types = new Set(DATA.cards.map(c => c.type || 'qa'));
+  if (types.size <= 1) { container.innerHTML = ''; return; }
+  const labels = [{t:'all',l:'All'}];
+  for (const t of types) labels.push({t, l: TYPE_LABELS[t] || t});
+  container.innerHTML = labels.map(({t,l}) => `<button class="type-btn ${t===activeTypeFilter?'active':''}" data-type="${t}">${l}</button>`).join('');
+  container.querySelectorAll('.type-btn').forEach(btn => {
+    btn.addEventListener('click', () => { activeTypeFilter = btn.dataset.type; renderTypeFilters(); renderCards(); });
+  });
+}
+
+function renderCards() {
+  const deck = $('#card-deck');
+  if (!deck) return;
+  renderTypeFilters();
+  const allCards = getDueCards();
+  const filtered = activeTypeFilter === 'all' ? allCards : allCards.filter(c => (c.type || 'qa') === activeTypeFilter);
+  const dueCount = allCards.filter(c => c.isDue).length;
+  const info = $('#cards-due-info');
+  if (info) info.textContent = `${dueCount} due today / ${allCards.length} total`;
+
+  deck.innerHTML = filtered.map((c, i) => {
+    const qtype = c.type || 'qa';
+    const label = TYPE_LABELS[qtype] || qtype;
+    const diff = '★'.repeat(c.difficulty || 3) + '☆'.repeat(5 - (c.difficulty || 3));
+    const header = `<div class="q-header"><span class="q-type">${label}</span><span class="q-diff">${diff}</span><span class="q-diff">Bloom: ${c.bloom_level||'?'}</span></div>`;
+    const srsBtns = `<div class="card-status"><button class="s-0" data-quality="0">Forgot</button><button class="s-1" data-quality="1">Hard</button><button class="s-2" data-quality="2">Good</button><button class="s-3" data-quality="3">Easy</button></div>`;
+    const statusLabel = c.state.reviews === 0 ? 'New' : `Interval: ${c.state.interval}d`;
+    let body = '';
+
+    if (qtype === 'qa') {
+      body = `<div class="q-stem">${escHtml(c.question)}</div><div class="q-explanation show" style="display:block"><strong>A:</strong> ${escHtml(c.answer)}</div>`;
+    } else if (qtype === 'true_false') {
+      body = `<div class="q-stem">${escHtml(c.statement||'')}</div>
+        <div class="q-options"><div class="q-opt" data-val="true">正确 / True</div><div class="q-opt" data-val="false">错误 / False</div></div>
+        <div class="q-explanation">${escHtml(c.explanation||'')}</div>`;
+    } else if (qtype === 'choice') {
+      body = `<div class="q-stem">${escHtml(c.question||'')}</div>
+        <div class="q-options">${(c.options||[]).map((o,j)=>`<div class="q-opt" data-val="${j}">${escHtml(o)}</div>`).join('')}</div>
+        <div class="q-explanation">${escHtml(c.explanation||'')}</div>`;
+    } else if (qtype === 'fill_blank') {
+      const tmpl = c.template || '';
+      let rendered = tmpl;
+      (c.blanks||[]).forEach((b, bi) => { rendered = rendered.replace('___', `<input class="q-blank-input" data-blank="${bi}" placeholder="___">`); });
+      body = `<div class="q-stem">${rendered}</div>
+        <div class="q-actions"><button class="q-check-blank">Check</button></div>
+        <div class="q-explanation">${(c.blanks||[]).map(b=>escHtml(b.answer||'')).join(', ')}</div>`;
+    } else if (qtype === 'sequencing') {
+      const items = (c.items||[]).map((it,j) => `<div class="q-seq-item" draggable="true" data-orig="${j}">${escHtml(it)}</div>`).join('');
+      body = `<div class="q-stem">Drag to reorder:</div><div class="q-seq-list">${items}</div>
+        <div class="q-actions"><button class="q-check-seq">Check Order</button></div>
+        <div class="q-explanation">Correct: ${(c.correct_order||[]).map(oi=>(c.items||[])[oi]).join(' → ')}</div>`;
+    } else if (qtype === 'matching') {
+      const pairs = c.pairs || [];
+      const lefts = pairs.map((p,j) => `<div class="q-match-item" data-side="left" data-idx="${j}">${escHtml(p.left)}</div>`).join('');
+      const rights = pairs.map((p,j) => `<div class="q-match-item" data-side="right" data-idx="${j}">${escHtml(p.right)}</div>`).join('');
+      body = `<div class="q-stem">Match pairs:</div><div class="q-match-grid"><div>${lefts}</div><div>${rights}</div></div>
+        <div class="q-actions"><button class="q-check-match">Check</button></div>`;
+    } else if (qtype === 'code') {
+      body = `<div class="q-stem">${escHtml(c.context||'')}</div>
+        <pre class="q-code">${escHtml(c.missing_code||'___')}</pre>
+        <textarea class="q-textarea q-code-answer" placeholder="Write the missing code..."></textarea>
+        <div class="q-actions"><button class="q-check-code">Show Answer</button></div>
+        <div class="q-explanation"><pre>${escHtml(c.answer||'')}</pre></div>`;
+    } else if (qtype === 'scenario') {
+      body = `<div class="q-stem"><strong>Scenario:</strong> ${escHtml(c.scenario||'')}</div>
+        <div class="q-stem">${escHtml(c.question||'')}</div>
+        <textarea class="q-textarea q-scenario-answer" placeholder="Write your answer..."></textarea>
+        <div class="q-actions"><button class="q-show-sample">Show Sample Answer</button></div>
+        <div class="q-explanation"><strong>Sample:</strong> ${escHtml(c.sample_answer||'')}</div>
+        <div class="q-key-points"><ul>${(c.key_points||[]).map(kp=>`<li>${escHtml(kp)}</li>`).join('')}</ul></div>`;
+    } else if (qtype === 'explain') {
+      body = `<div class="q-stem"><strong>${escHtml(c.concept||'')}</strong></div>
+        <div class="q-stem">${escHtml(c.prompt||'Explain in your own words')}</div>
+        <textarea class="q-textarea q-explain-answer" placeholder="Your explanation..."></textarea>
+        <div class="q-actions"><button class="q-show-criteria">Show Criteria</button></div>
+        <div class="q-explanation"><strong>Criteria:</strong> ${(c.evaluation_criteria||[]).map(cr=>escHtml(cr)).join(', ')}</div>`;
+    } else if (qtype === 'comparison') {
+      body = `<div class="q-stem">${escHtml(c.question||'Compare: '+(c.subjects||[]).join(' vs '))}</div>
+        <textarea class="q-textarea q-compare-answer" placeholder="Your comparison..."></textarea>
+        <div class="q-actions"><button class="q-show-compare-answer">Show Answer</button></div>
+        <div class="q-explanation">${escHtml(c.answer||'')}</div>`;
+    } else {
+      // Fallback: treat as QA
+      body = `<div class="q-stem">${escHtml(c.question||c.statement||'')}</div>
+        <div class="q-explanation show" style="display:block">${escHtml(c.answer||c.explanation||'')}</div>`;
+    }
+
+    return `<div class="q-card" data-idx="${c.idx}" data-type="${qtype}">
+      ${header}${body}
+      <div style="font-size:.7rem;color:var(--fg3);margin-top:6px">${statusLabel}</div>
+      ${srsBtns}
+    </div>`;
+  }).join('');
+
+  // Wire up interactions
+  deck.querySelectorAll('.q-card').forEach(card => {
+    const idx = parseInt(card.dataset.idx);
+    // SRS buttons
+    card.querySelectorAll('.card-status button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const quality = parseInt(btn.dataset.quality);
+        const srs = loadSRS();
+        if (!srs[idx]) srs[idx] = initCardState(idx);
+        sm2(srs[idx], quality);
+        saveSRS(srs);
+        setTimeout(() => renderCards(), 200);
+      });
+    });
+    // Choice / True-False click
+    card.querySelectorAll('.q-opt').forEach(opt => {
+      opt.addEventListener('click', () => {
+        if (opt.classList.contains('correct') || opt.classList.contains('wrong')) return;
+        const qtype = card.dataset.type;
+        const siblings = card.querySelectorAll('.q-opt');
+        siblings.forEach(s => s.classList.remove('selected'));
+        opt.classList.add('selected');
+        if (qtype === 'true_false') {
+          const correct = opt.dataset.val === String(card.querySelector('.q-card')?.dataset?.correct || '');
+          // For TF, just show explanation
+        } else if (qtype === 'choice') {
+          // Auto-check on click
+          const expl = card.querySelector('.q-explanation');
+          if (expl) expl.classList.add('show');
+        }
+      });
+    });
+    // Fill-blank check
+    card.querySelector('.q-check-blank')?.addEventListener('click', () => {
+      card.querySelectorAll('.q-blank-input').forEach(inp => {
+        const bi = parseInt(inp.dataset.blank);
+        const cardData = DATA.cards[idx];
+        const blanks = cardData.blanks || [];
+        const correct = blanks[bi]?.answer || '';
+        inp.classList.toggle('correct', inp.value.trim().toLowerCase() === correct.toLowerCase());
+        inp.classList.toggle('wrong', inp.value.trim().toLowerCase() !== correct.toLowerCase() && inp.value.trim());
+      });
+      const expl = card.querySelector('.q-explanation');
+      if (expl) expl.classList.add('show');
+    });
+    // Show explanation / answer buttons
+    card.querySelector('.q-check-code')?.addEventListener('click', () => { card.querySelector('.q-explanation')?.classList.add('show'); });
+    card.querySelector('.q-show-sample')?.addEventListener('click', () => { card.querySelector('.q-explanation')?.classList.add('show'); });
+    card.querySelector('.q-show-criteria')?.addEventListener('click', () => { card.querySelector('.q-explanation')?.classList.add('show'); });
+    card.querySelector('.q-show-compare-answer')?.addEventListener('click', () => { card.querySelector('.q-explanation')?.classList.add('show'); });
+    // Sequencing check
+    card.querySelector('.q-check-seq')?.addEventListener('click', () => {
+      const cardData = DATA.cards[idx];
+      const correctOrder = cardData.correct_order || [];
+      const items = card.querySelectorAll('.q-seq-item');
+      items.forEach((item, pos) => {
+        const origIdx = parseInt(item.dataset.orig);
+        item.classList.toggle('correct-pos', origIdx === correctOrder[pos]);
+        item.classList.toggle('wrong-pos', origIdx !== correctOrder[pos]);
+      });
+      card.querySelector('.q-explanation')?.classList.add('show');
+    });
+    // Drag and drop for sequencing
+    const seqList = card.querySelector('.q-seq-list');
+    if (seqList) {
+      let dragged = null;
+      seqList.querySelectorAll('.q-seq-item').forEach(item => {
+        item.addEventListener('dragstart', () => { dragged = item; item.classList.add('dragging'); });
+        item.addEventListener('dragend', () => { item.classList.remove('dragging'); dragged = null; });
+        item.addEventListener('dragover', e => { e.preventDefault(); });
+        item.addEventListener('drop', e => {
+          e.preventDefault();
+          if (dragged && dragged !== item) {
+            const parent = item.parentNode;
+            const items = [...parent.children];
+            const fromIdx = items.indexOf(dragged);
+            const toIdx = items.indexOf(item);
+            if (fromIdx < toIdx) parent.insertBefore(dragged, item.nextSibling);
+            else parent.insertBefore(dragged, item);
+          }
+        });
+      });
+    }
+    // Matching
+    let matchLeft = null, matchRight = null;
+    card.querySelectorAll('.q-match-item[data-side="left"]').forEach(item => {
+      item.addEventListener('click', () => {
+        if (item.classList.contains('matched')) return;
+        card.querySelectorAll('.q-match-item[data-side="left"]').forEach(i => i.classList.remove('selected'));
+        item.classList.add('selected');
+        matchLeft = parseInt(item.dataset.idx);
+        if (matchRight !== null) { matchLeft = null; matchRight = null; card.querySelectorAll('.q-match-item').forEach(i => i.classList.remove('selected')); }
+      });
+    });
+    card.querySelectorAll('.q-match-item[data-side="right"]').forEach(item => {
+      item.addEventListener('click', () => {
+        if (item.classList.contains('matched')) return;
+        matchRight = parseInt(item.dataset.idx);
+        if (matchLeft !== null) {
+          const correct = matchLeft === matchRight;
+          const lEl = card.querySelector(`.q-match-item[data-side="left"][data-idx="${matchLeft}"]`);
+          const rEl = card.querySelector(`.q-match-item[data-side="right"][data-idx="${matchRight}"]`);
+          if (correct && lEl && rEl) { lEl.classList.add('matched'); rEl.classList.add('matched'); }
+          matchLeft = null; matchRight = null;
+          card.querySelectorAll('.q-match-item').forEach(i => i.classList.remove('selected'));
+        }
+      });
+    });
+  });
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ===== SRS Review Mode =====
+function startSRS() {
+  const dueCards = getDueCards().filter(c => c.isDue);
+  if (!dueCards.length) { alert('No cards due today!'); return; }
+
+  const overlay = $('#srs-overlay');
+  const session = $('#srs-session');
+  overlay.classList.add('active');
+  let current = 0;
+
+  function showCard() {
+    if (current >= dueCards.length) {
+      session.innerHTML = `<div class="srs-done">
+        <h2>Review Complete!</h2>
+        <p>You reviewed ${dueCards.length} cards.</p>
+        <button class="btn btn-primary" id="srs-close">Close</button>
+      </div>`;
+      $('#srs-close').addEventListener('click', () => overlay.classList.remove('active'));
+      return;
+    }
+    const c = dueCards[current];
+    session.innerHTML = `
+      <div class="srs-progress">${current + 1} / ${dueCards.length}</div>
+      <div class="srs-card" id="srs-card">
+        <div class="card-inner">
+          <div class="card-front"><div class="card-text">${escHtml(c.question)}</div></div>
+          <div class="card-back"><div class="card-text">${escHtml(c.answer)}</div></div>
+        </div>
+      </div>
+      <div class="srs-buttons" id="srs-btns" style="display:none">
+        <button style="background:var(--red)" data-q="0">Forgot</button>
+        <button style="background:var(--orange)" data-q="1">Hard</button>
+        <button style="background:var(--green)" data-q="2">Good</button>
+        <button style="background:var(--accent)" data-q="3">Easy</button>
+      </div>`;
+
+    const card = $('#srs-card');
+    const btns = $('#srs-btns');
+    card.addEventListener('click', () => {
+      card.classList.toggle('flipped');
+      if (card.classList.contains('flipped')) btns.style.display = 'flex';
+    });
+    btns.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const srs = loadSRS();
+        if (!srs[c.idx]) srs[c.idx] = initCardState(c.idx);
+        sm2(srs[c.idx], parseInt(btn.dataset.q));
+        saveSRS(srs);
+        current++;
+        showCard();
+      });
+    });
+  }
+  showCard();
+}
+
+// Cards controls
+if ($('#srs-start')) {
+  $('#srs-start').addEventListener('click', startSRS);
+  $('#cards-reset').addEventListener('click', () => {
+    if (confirm('Reset all card progress?')) {
+      localStorage.removeItem(SRS_KEY);
+      renderCards();
+    }
+  });
+  renderCards();
+}
+
+// ===== Timeline =====
+function renderTimeline() {
+  const tl = $('#timeline');
+  if (!tl) return;
+  const transcriptSegs = DATA.transcriptSegments;
+
+  tl.innerHTML = DATA.frames.map((f, i) => {
+    // Estimate matching transcript segment
+    const segIdx = transcriptSegs.length > 1
+      ? Math.round(i / (DATA.frames.length - 1) * (transcriptSegs.length - 1))
+      : 0;
+    const seg = transcriptSegs[segIdx];
+    const segText = seg ? seg.text : '';
+    return `<div class="timeline-item" data-seg-idx="${segIdx}">
+      <div class="tl-time">${f.timestamp || ''}</div>
+      <img class="tl-frame" src="${f.data_uri}" alt="Frame ${i + 1}" data-frame-idx="${i}">
+      ${segText ? `<div class="tl-text">${escHtml(segText.slice(0, 120))}${segText.length > 120 ? '...' : ''}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  // Frame click → open lightbox
+  tl.querySelectorAll('.tl-frame').forEach(img => {
+    img.addEventListener('click', () => {
+      openLightbox(parseInt(img.dataset.frameIdx));
+    });
+  });
+
+  // Timeline text click → jump to transcript segment
+  tl.querySelectorAll('.tl-text').forEach(el => {
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', () => {
+      const segIdx = parseInt(el.closest('.timeline-item').dataset.segIdx);
+      $$('.nav-tab').forEach(t => t.classList.remove('active'));
+      $$('.panel').forEach(p => p.classList.remove('active'));
+      $$('.nav-tab').forEach(t => { if (t.dataset.tab === 'transcript') t.classList.add('active'); });
+      $('#panel-transcript').classList.add('active');
+      const segEl = document.querySelector(`.transcript-seg[data-idx="${segIdx}"]`);
+      if (segEl) {
+        segEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        segEl.classList.add('highlight');
+        setTimeout(() => segEl.classList.remove('highlight'), 3000);
+      }
+    });
+  });
+}
+renderTimeline();
+
+// ===== Transcript =====
+function segTimestampToSeconds(ts) {
+  if (!ts) return -1;
+  const parts = ts.split(':');
+  return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+}
+
+function findNearestFrame(segIdx) {
+  if (!DATA.frames || !DATA.frames.length || !DATA.transcriptSegments.length) return null;
+  const seg = DATA.transcriptSegments[segIdx];
+  const segSec = segTimestampToSeconds(seg.timestamp);
+  if (segSec < 0) return null;
+  let best = null, bestDist = Infinity;
+  for (const f of DATA.frames) {
+    const fSec = segTimestampToSeconds(f.timestamp);
+    if (fSec < 0) continue;
+    const dist = Math.abs(fSec - segSec);
+    if (dist < bestDist && dist <= 5) { bestDist = dist; best = f; }
+  }
+  return best;
+}
+
+function renderTranscript() {
+  const body = $('#transcript-body');
+  if (!body) return;
+  const notes = (loadSRS()).notes || {};
+
+  body.innerHTML = DATA.transcriptSegments.map((seg, i) => {
+    const note = notes[i];
+    const nearFrame = findNearestFrame(i);
+    const frameHtml = nearFrame ? `<div class="seg-frame"><img src="${nearFrame.data_uri}" alt="Frame at ${nearFrame.timestamp}"></div>` : '';
+    return `<div class="transcript-seg" data-idx="${i}">
+      <span class="seg-time">${seg.timestamp || ''}</span>
+      <span class="seg-text">${escHtml(seg.text)}</span>
+      <button class="note-btn ${note ? 'has-note' : ''}" data-idx="${i}" title="Add note">&#128221;</button>
+    </div>
+    ${note ? `<div class="seg-note" data-note-idx="${i}">${escHtml(note)}</div>` : ''}`;
+  }).join('');
+
+  // Note buttons
+  body.querySelectorAll('.note-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = btn.dataset.idx;
+      const existing = body.querySelector(`.note-input-wrap[data-note-idx="${idx}"]`);
+      if (existing) { existing.remove(); return; }
+
+      const wrap = document.createElement('div');
+      wrap.className = 'note-input-wrap';
+      wrap.dataset.noteIdx = idx;
+      const srs = loadSRS();
+      const notes = srs.notes || {};
+      wrap.innerHTML = `
+        <textarea placeholder="Write a note...">${notes[idx] || ''}</textarea>
+        <button class="btn btn-primary" data-action="save">Save</button>
+        <button class="btn btn-ghost" data-action="cancel">Cancel</button>
+        ${notes[idx] ? '<button class="btn btn-ghost" data-action="delete" style="color:var(--red)">Delete</button>' : ''}`;
+
+      const segEl = body.querySelector(`.transcript-seg[data-idx="${idx}"]`);
+      segEl.after(wrap);
+      wrap.querySelector('textarea').focus();
+
+      wrap.addEventListener('click', e => {
+        const action = e.target.dataset.action;
+        if (!action) return;
+        const srs = loadSRS();
+        if (!srs.notes) srs.notes = {};
+        if (action === 'save') {
+          const text = wrap.querySelector('textarea').value.trim();
+          if (text) srs.notes[idx] = text;
+          else delete srs.notes[idx];
+          saveSRS(srs);
+          renderTranscript();
+        } else if (action === 'delete') {
+          delete srs.notes[idx];
+          saveSRS(srs);
+          renderTranscript();
+        } else {
+          wrap.remove();
+        }
+      });
+    });
+  });
+}
+renderTranscript();
+
+// Transcript search
+setupSearch('ts-search', 'ts-search-count', 'ts-search-prev', 'ts-search-next', $('#transcript-body'));
+
+// ===== Lightbox =====
+let lbFrames = DATA.frames;
+let lbIdx = 0;
+
+function openLightbox(idx) {
+  lbIdx = idx;
+  const lb = $('#lightbox');
+  lb.classList.add('active');
+  updateLightbox();
+}
+
+function updateLightbox() {
+  $('#lb-img').src = lbFrames[lbIdx].data_uri;
+  $('#lb-counter').textContent = `${lbIdx + 1} / ${lbFrames.length}`;
+}
+
+$('#lb-prev').addEventListener('click', e => { e.stopPropagation(); lbIdx = (lbIdx - 1 + lbFrames.length) % lbFrames.length; updateLightbox(); });
+$('#lb-next').addEventListener('click', e => { e.stopPropagation(); lbIdx = (lbIdx + 1) % lbFrames.length; updateLightbox(); });
+$('#lightbox').addEventListener('click', e => { if (e.target === $('#lightbox') || e.target === $('#lb-img')) $('#lightbox').classList.remove('active'); });
+
+document.addEventListener('keydown', e => {
+  const lb = $('#lightbox');
+  if (!lb.classList.contains('active')) return;
+  if (e.key === 'Escape') lb.classList.remove('active');
+  if (e.key === 'ArrowLeft') { lbIdx = (lbIdx - 1 + lbFrames.length) % lbFrames.length; updateLightbox(); }
+  if (e.key === 'ArrowRight') { lbIdx = (lbIdx + 1) % lbFrames.length; updateLightbox(); }
+});
+</script>
+</body>
+</html>
