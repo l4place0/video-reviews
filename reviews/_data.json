@@ -79,5 +79,26 @@
     ],
     "summary_preview": "## 核心主题 本教程演示如何从零开始，使用SDL库在C语言程序中加载并播放音频文件。  ## 前置条件 - 具备基础的C语言编程知识。 - 已安装SDL库开发环境。 - 准备好一个音频文件（如WAV格式）用于测试。  ## 操作步骤 1.  **加载音频文件**：使用\\`SDL_LoadWAV\\`函数...",
     "url": "reviews/d3ed4efb-546f-4e9f-9295-0af152364720.html"
+  },
+  {
+    "id": "4f889c1b-24a6-439c-b528-6497c4ff1cea",
+    "title": "【中文字幕】从零开始用 C 处理音频｜SDL 音频",
+    "platform": "bilibili",
+    "date": "2026-05-28",
+    "tags": [
+      "tutorial",
+      "bilibili高考季",
+      "C语言",
+      "编程",
+      "RookieOnline菜鸟在线",
+      "C/C++",
+      "【中文字幕】",
+      "数据结构",
+      "Linux",
+      "Coding",
+      "ArrayList"
+    ],
+    "summary_preview": "## 核心主题 本教程展示了如何使用 C 语言和 SDL（Simple DirectMedia Layer）库，从零开始实现基础的音频文件播放功能。  ## 前置条件 1.  **C/C++ 编程基础**：需要理解变量、函数、结构体和基本的编译链接知识。 2.  **SDL 库环境**：已安装 SD...",
+    "url": "reviews/4f889c1b-24a6-439c-b528-6497c4ff1cea.html"
   }
 ]
